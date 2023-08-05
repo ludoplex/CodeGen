@@ -87,9 +87,7 @@ class CodeGenAttention(nn.Module):
         self.qkv_proj = nn.Linear(self.embed_dim, self.embed_dim * 3, bias=False)
 
         self.out_proj = nn.Linear(self.embed_dim, self.embed_dim, bias=False)
-        self.rotary_dim = None
-        if config.rotary_dim is not None:
-            self.rotary_dim = config.rotary_dim
+        self.rotary_dim = config.rotary_dim if config.rotary_dim is not None else None
 
     def _split_heads(self, x, n_head, dim_head, mp_num):
         reshaped = x.reshape(x.shape[:-1] + (n_head//mp_num, dim_head))
@@ -204,11 +202,7 @@ class CodeGenAttention(nn.Module):
             key = torch.cat((past_key, key), dim=-2)
             value = torch.cat((past_value, value), dim=-2)
 
-        if use_cache is True:
-            present = (key, value)
-        else:
-            present = None
-
+        present = (key, value) if use_cache is True else None
         # compute self-attention: V x Softmax(QK^T)
         attn_output, attn_weights = self._attn(query, key, value, attention_mask, head_mask)
 
@@ -276,12 +270,11 @@ class CodeGenBlock(nn.Module):
         feed_forward_hidden_states = self.mlp(hidden_states)
         hidden_states = attn_output + feed_forward_hidden_states + residual
 
-        if use_cache:
-            outputs = (hidden_states,) + outputs
-        else:
-            outputs = (hidden_states,) + outputs[1:]
-
-        return outputs  # hidden_states, present, (attentions)
+        return (
+            (hidden_states,) + outputs
+            if use_cache
+            else (hidden_states,) + outputs[1:]
+        )
 
 
 class CodeGenPreTrainedModel(PreTrainedModel):
@@ -339,13 +332,17 @@ class CodeGenModel(CodeGenPreTrainedModel):
         )
         assert_device_map(self.device_map, len(self.h))
         self.model_parallel = True
-        self.first_device = "cpu" if "cpu" in self.device_map.keys() else "cuda:" + str(min(self.device_map.keys()))
-        self.last_device = "cuda:" + str(max(self.device_map.keys()))
+        self.first_device = (
+            "cpu"
+            if "cpu" in self.device_map.keys()
+            else f"cuda:{str(min(self.device_map.keys()))}"
+        )
+        self.last_device = f"cuda:{str(max(self.device_map.keys()))}"
         self.wte = self.wte.to(self.first_device)
         # Load onto devices
         for k, v in self.device_map.items():
             for block in v:
-                cuda_device = "cuda:" + str(k)
+                cuda_device = f"cuda:{str(k)}"
                 self.h[block] = self.h[block].to(cuda_device)
         # ln_f to last
         self.ln_f = self.ln_f.to(self.last_device)
@@ -519,8 +516,8 @@ class CodeGenModel(CodeGenPreTrainedModel):
             # Model Parallel: If it's the last layer for that device, put things on the next device
             if self.model_parallel:
                 for k, v in self.device_map.items():
-                    if i == v[-1] and "cuda:" + str(k) != self.last_device:
-                        hidden_states = hidden_states.to("cuda:" + str(k + 1))
+                    if i == v[-1] and f"cuda:{str(k)}" != self.last_device:
+                        hidden_states = hidden_states.to(f"cuda:{str(k + 1)}")
 
         hidden_states = self.ln_f(hidden_states)
 

@@ -161,10 +161,7 @@ def truncate(completion):
     start_pos = 0
 
     terminals_pos = [pos for pos in [find_re(completion, terminal, start_pos) for terminal in terminals] if pos != -1]
-    if len(terminals_pos) > 0:
-        return completion[:min(terminals_pos)]
-    else:
-        return completion
+    return completion[:min(terminals_pos)] if terminals_pos else completion
 
 
 def test_truncate():
