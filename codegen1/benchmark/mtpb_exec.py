@@ -48,7 +48,7 @@ def reliability_guard(maximum_memory_bytes=None):
         import resource
         resource.setrlimit(resource.RLIMIT_AS, (maximum_memory_bytes, maximum_memory_bytes))
         resource.setrlimit(resource.RLIMIT_DATA, (maximum_memory_bytes, maximum_memory_bytes))
-        if not platform.uname().system == 'Darwin':
+        if platform.uname().system != 'Darwin':
             resource.setrlimit(resource.RLIMIT_STACK, (maximum_memory_bytes, maximum_memory_bytes))
 
     faulthandler.disable()
@@ -152,11 +152,9 @@ def write_jsonl(filename, data):
 def read_jsonl(filename):
     result = []
     with open(filename, "rb") as f:
-        for l in f:
-            result.append(json.loads(l))
-
+        result.extend(json.loads(l) for l in f)
     # add a test_id
-    test_case_map = {t: i for i, t in enumerate(set([str(r['input']) for r in result]))}
+    test_case_map = {t: i for i, t in enumerate({str(r['input']) for r in result})}
     print(filename, len(test_case_map))
     for r in result:
         r['test_id'] = test_case_map[str(r['input'])]
@@ -465,10 +463,12 @@ def eval_problems(problems, verbose, ks=1):
     print(f'n_total={n_total} n_success={n_success}')
     print("-" * 40)
 
-    pids = sorted(set(p[0] for p in pass_stats))
+    pids = sorted({p[0] for p in pass_stats})
     for pid in pids:
         test_cases = [v for k, v in pass_stats.items() if k[0] == pid]
-        print(f"{pid:15s}: {sum([i for t in test_cases for i in t]):3d} : {sum([len(t) for t in test_cases])}")
+        print(
+            f"{pid:15s}: {sum(i for t in test_cases for i in t):3d} : {sum(len(t) for t in test_cases)}"
+        )
 
 
 ########################################################################

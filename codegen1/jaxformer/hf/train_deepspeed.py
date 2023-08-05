@@ -163,8 +163,7 @@ def get_exp_id(file):
 def get_output_dir(exp_id):
     import datetime
     t = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-    output_dir = os.path.join('output/' + exp_id, t)
-    return output_dir
+    return os.path.join(f'output/{exp_id}', t)
 
 
 def copy_source(file, output_dir):

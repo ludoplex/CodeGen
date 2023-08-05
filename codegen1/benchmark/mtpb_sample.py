@@ -157,7 +157,7 @@ def sample(
 
 def truncate(completion):
     import re
-    
+
     def find_re(string, pattern, start_pos):
         m = pattern.search(string, start_pos)
         return m.start() if m else -1
@@ -175,10 +175,7 @@ def truncate(completion):
     start_pos = 0
 
     terminals_pos = [pos for pos in [find_re(completion, terminal, start_pos) for terminal in terminals] if pos != -1]
-    if len(terminals_pos) > 0:
-        return completion[:min(terminals_pos)]
-    else:
-        return completion   
+    return completion[:min(terminals_pos)] if terminals_pos else completion   
 
 
 def test_truncate():
@@ -203,11 +200,8 @@ def create_problem_set(problems_path, problem_ids):
                 print(p)
                 print(line)
                 raise e
-            if not problem_ids:
+            if not problem_ids or int(prob['id']) in problem_ids:
                 problems.append(prob)
-            elif int(prob['id']) in problem_ids:
-                problems.append(prob)
-
     return sorted(problems, key=lambda x: int(x["id"]))
 
 
@@ -279,7 +273,7 @@ def sample_completions(
                             max_gen_length=problem.get("max_gen_length", max_gen_length),
                         )
 
-                        histories = [h + f"{truncate(c)}\n\n" for h, c in zip(histories, completions)]
+                        histories = [f"{h}{truncate(c)}\n\n" for h, c in zip(histories, completions)]
                         histories_full = [h + [f"{truncate(c)}\n\n"] for h, c in zip(histories_full, completions)]
 
                         print('-' * 10)
@@ -288,17 +282,18 @@ def sample_completions(
                         print(histories[0])
                         print('-' * 10)
 
-                    for history, history_full in zip(histories, histories_full):
-                        samples.append(
-                            {
-                                "id": problem["id"],
-                                "input": input,
-                                "gold_output": output,
-                                "completions": history,
-                                "prompts_completions": history_full
-                            }
+                    samples.extend(
+                        {
+                            "id": problem["id"],
+                            "input": input,
+                            "gold_output": output,
+                            "completions": history,
+                            "prompts_completions": history_full,
+                        }
+                        for history, history_full in zip(
+                            histories, histories_full
                         )
-
+                    )
             write_jsonl(out_file(problem['id']), samples)
 
 
